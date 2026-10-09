@@ -1,13 +1,13 @@
 # MilkDeadLockDry
 
-Local luancher starting solution: .NET 10, Avalonia/XAML,
+Local luancher starting solution: .NET 10, native macOS AppKit,
 CommunityToolkit.Mvvm
 
 ## Projects and dependencies
 
 - **MilkDeadLockDry.Core**: Domain - models and rules; Application - scenarios and contracts
 - **MilkDeadLockDry.Infrastructure**: processes, Wine, file и storage, depends on Core
-- **MilkDeadLockDry.Desktop**: Avalonia Views и ViewModels, depends on Core and Infrastructure
+- **MilkDeadLockDry.Desktop**: AppKit Views и ViewModels, depends on Core and Infrastructure
   Infrastructure link used by build dependencies in composition root
 
 Core doesn't depends on another projects
@@ -21,3 +21,8 @@ Folders Domain/Application includes only responsibility descriptions for now
 - Then connect FakeGameRunner and button with progress/cancel in Desktop
 - Real WineGameRunner needs to be added into Infrastructure after runtime check through CLI
 - Deadlock launch and mod managment isn't implemented yet
+
+`Program` initializes AppKit, `AppDelegate` owns application lifecycle and menus,
+and `MainWindowController` builds an `NSWindow` with native controls and Auto Layout
+`MainViewModel` retains CommunityToolkit.Mvvm The window controller connects
+control events to commands and observes `PropertyChanged`, there is no XAML binding engine
