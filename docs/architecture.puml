@@ -2,7 +2,7 @@
 title MilkDeadLockDry — компоненты и зависимости
 skinparam shadowing false
 package "MilkDeadLockDry.app — один выпуск" {
-  component "MilkDeadLockDry.Desktop\nAvalonia + CommunityToolkit.Mvvm" as Desktop
+  component "MilkDeadLockDry.Desktop\nAppKit + CommunityToolkit.Mvvm" as Desktop
   component "MilkDeadLockDry.Core\nGameLaunch / Runtime / Mods / Profiles" as Core
   component "MilkDeadLockDry.Infrastructure\nWine / файловая система / JSON" as Infrastructure
   Desktop ..> Core : вызывает сценарии
@@ -18,7 +18,7 @@ Infrastructure --> Game : запуск и наблюдение
 Infrastructure --> Files : чтение и запись
 note bottom of Core
   Модули — функциональные границы внутри монолита.
-  Core не зависит от Avalonia, Toolkit и конкретного Wine.
+  Core не зависит от AppKit, Toolkit и конкретного Wine.
   RabbitMQ и Kafka в этой архитектуре отсутствуют.
 end note
 @enduml
@@ -26,10 +26,10 @@ end note
 @startuml classes
 title MilkDeadLockDry — классы сценария запуска
 skinparam shadowing false
-class MainWindow <<View>> {
-  DataContext : MainWindowViewModel
+class MainWindowController <<View>> {
+  viewModel : MainViewModel
 }
-class MainWindowViewModel <<ViewModel>> {
+class MainViewModel <<ViewModel>> {
   SelectedProfile : ModProfile
   IsBusy : bool
   Progress : LaunchProgress
@@ -57,8 +57,8 @@ interface IProfileRepository {
 class WineGameRunner <<Infrastructure>>
 class ModInstaller <<Infrastructure>>
 class JsonProfileRepository <<Infrastructure>>
-MainWindow ..> MainWindowViewModel : binding
-MainWindowViewModel ..> LaunchGameUseCase : await
+MainWindowController ..> MainViewModel : события / PropertyChanged
+MainViewModel ..> LaunchGameUseCase : await
 LaunchGameUseCase ..> LaunchRequest
 LaunchGameUseCase ..> IProfileRepository
 LaunchGameUseCase ..> IModInstaller
@@ -66,7 +66,7 @@ LaunchGameUseCase ..> IGameRunner
 WineGameRunner ..|> IGameRunner
 ModInstaller ..|> IModInstaller
 JsonProfileRepository ..|> IProfileRepository
-note bottom of MainWindowViewModel
+note bottom of MainViewModel
   Model — ModProfile / RuntimeSpec / InstallPlan.
   ViewModel хранит состояние экрана, а не правила установки.
   Подписи методов — эскиз контрактов, не готовые API.
@@ -77,7 +77,7 @@ end note
 title MilkDeadLockDry — успешный запуск с модами
 skinparam shadowing false
 actor Пользователь as User
-participant MainWindowViewModel as VM
+participant MainViewModel as VM
 participant LaunchGameUseCase as UC
 participant ModInstaller as Mods
 participant WineGameRunner as Runner

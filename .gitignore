@@ -12,3 +12,6 @@ artifacts/
 .DS_Store
 .AppleDouble/
 ._*
+
+# Optional project-local .NET SDK and workloads
+.dotnet/
