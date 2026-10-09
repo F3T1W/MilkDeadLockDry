@@ -1,114 +1,82 @@
 @startuml components
-title MilkDeadLockDry — компоненты и зависимости
+title DeadLocky — FSD
 skinparam shadowing false
-package "MilkDeadLockDry.app — один выпуск" {
-  component "MilkDeadLockDry.Desktop\nAppKit + CommunityToolkit.Mvvm" as Desktop
-  component "MilkDeadLockDry.Core\nGameLaunch / Runtime / Mods / Profiles" as Core
-  component "MilkDeadLockDry.Infrastructure\nWine / файловая система / JSON" as Infrastructure
-  Desktop ..> Core : вызывает сценарии
-  Infrastructure ..> Core : использует контракты
-  Desktop ..> Infrastructure : только регистрация в DI
+caption DeadLocky.slnx: application + xUnit project; FSD layers inside src/DeadLocky/
+package "src/DeadLocky — net10.0-macos / AppKit" {
+rectangle "App\nEntryPoint / Composition / Ui" as App
+rectangle "Pages\nLauncher/Ui" as Pages
+rectangle "Features\nSelectGameDirectory/Model + Ui" as Features
+rectangle "Entities\nGame/Model" as Entities
+rectangle "Shared\nApi/Directories" as Shared
 }
-component "MilkDeadLockDry.Cli\nинструмент разработки" as Cli
-component "Wine → Windows Steam → Deadlock\nвнешние процессы" as Game
-folder "Application Support\nпрофили / логи / journal / prefix" as Files
-Cli ..> Core : те же сценарии
-Cli ..> Infrastructure : регистрация в DI
-Infrastructure --> Game : запуск и наблюдение
-Infrastructure --> Files : чтение и запись
-note bottom of Core
-  Модули — функциональные границы внутри монолита.
-  Core не зависит от AppKit, Toolkit и конкретного Wine.
-  RabbitMQ и Kafka в этой архитектуре отсутствуют.
+rectangle "tests/DeadLocky.UnitTests\nnet10.0 / xUnit\nNo tests or project reference yet" as Tests
+artifact "Directory.Build.props\nC# 14 / nullable / analyzers / warnings as errors" as BuildProps
+BuildProps ..> App : shared build settings
+BuildProps ..> Tests : shared build settings
+App ..> Pages
+App ..> Shared : binds native adapter
+Pages ..> Features
+Pages ..> Shared : picker factory contract
+Features ..> Entities
+Features ..> Shared : generic I/O port
+note bottom of Features
+  State → action → Render.
+  Slice internals are internal; imports point downwards.
+  No MVVM dependency.
 end note
 @enduml
 
 @startuml classes
-title MilkDeadLockDry — классы сценария запуска
+title DeadLocky — directory selection
 skinparam shadowing false
-class MainWindowController <<View>> {
-  viewModel : MainViewModel
+class LauncherComposition <<App>>
+class LauncherWindowController <<Pages.Launcher>>
+class SelectGameDirectoryView <<Features public API>> {
+  SelectedDirectory : GameDirectory
+  SelectionChanged : event
 }
-class MainViewModel <<ViewModel>> {
-  SelectedProfile : ModProfile
-  IsBusy : bool
-  Progress : LaunchProgress
-  PlayCommand : IAsyncRelayCommand
-  CancelPreparationCommand : ICommand
+class DirectorySelectionController <<Features internal>> {
+  State : DirectorySelectionState
+  ChooseAsync() : Task
+  Clear()
+  Dispose()
 }
-class LaunchGameUseCase <<Core>> {
-  LaunchAsync(request, progress, ct) : Task<GameSession>
+class DirectorySelectionState <<immutable record>>
+class GameDirectory <<Entities public API>>
+interface IDirectoryPicker <<Shared port>> {
+  PickAsync(token) : Task<string?>
 }
-class LaunchRequest <<record>> {
-  RuntimeId
-  ProfileId
-  GamePath
-}
-interface IGameRunner {
-  StartAsync(request, progress, ct) : Task<GameSession>
-}
-interface IModInstaller {
-  ApplyAsync(plan, progress, ct) : Task<InstallResult>
-  RecoverAsync(ct) : Task
-}
-interface IProfileRepository {
-  LoadAsync(profileId, ct) : Task<ModProfile>
-}
-class WineGameRunner <<Infrastructure>>
-class ModInstaller <<Infrastructure>>
-class JsonProfileRepository <<Infrastructure>>
-MainWindowController ..> MainViewModel : события / PropertyChanged
-MainViewModel ..> LaunchGameUseCase : await
-LaunchGameUseCase ..> LaunchRequest
-LaunchGameUseCase ..> IProfileRepository
-LaunchGameUseCase ..> IModInstaller
-LaunchGameUseCase ..> IGameRunner
-WineGameRunner ..|> IGameRunner
-ModInstaller ..|> IModInstaller
-JsonProfileRepository ..|> IProfileRepository
-note bottom of MainViewModel
-  Model — ModProfile / RuntimeSpec / InstallPlan.
-  ViewModel хранит состояние экрана, а не правила установки.
-  Подписи методов — эскиз контрактов, не готовые API.
-end note
+class AppKitDirectoryPicker <<Shared adapter>>
+LauncherComposition --> LauncherWindowController
+LauncherComposition --> AppKitDirectoryPicker
+LauncherWindowController *-- SelectGameDirectoryView
+SelectGameDirectoryView *-- DirectorySelectionController
+DirectorySelectionController --> DirectorySelectionState
+DirectorySelectionState --> GameDirectory
+DirectorySelectionController --> IDirectoryPicker
+AppKitDirectoryPicker ..|> IDirectoryPicker
 @enduml
 
-@startuml launch
-title MilkDeadLockDry — успешный запуск с модами
-skinparam shadowing false
-actor Пользователь as User
-participant MainViewModel as VM
-participant LaunchGameUseCase as UC
-participant ModInstaller as Mods
-participant WineGameRunner as Runner
-participant "Steam / Deadlock" as Game
-User -> VM : Играть
-VM -> UC : LaunchAsync(request, progress, ct)
-activate UC
-UC -> UC : preflight, профиль, план, блокировка
-UC -> Mods : ApplyAsync(plan, progress, ct)
-activate Mods
-Mods -> Mods : staging → journal → apply
-Mods --> UC : InstallResult
-deactivate Mods
-UC --> VM : IProgress<LaunchProgress>
-UC -> Runner : StartAsync(request, progress, ct)
-activate Runner
-Runner -> Game : запустить / переиспользовать Steam своего prefix
-Runner -> Runner : дождаться и идентифицировать процесс игры
-Runner --> UC : GameSession
-deactivate Runner
-UC --> VM : GameSession
-deactivate UC
-VM --> User : статус Running
-note over VM, UC
-  Отмена подготовки и ожидания — CancellationToken.
-  Завершение запущенной игры — отдельная команда.
-end note
-note over UC, Mods
-  При сбое записи — восстановление по журналу.
-  При сбое запуска уже применённый профиль сохраняется:
-  восстановление Vanilla — отдельная операция.
-  В Vanilla-режиме шаг применения модов пропускается.
+@startuml select
+actor User
+participant SelectGameDirectoryView as View
+participant DirectorySelectionController as Action
+participant AppKitDirectoryPicker as Picker
+participant NSOpenPanel as Panel
+User -> View : Choose
+View -> Action : ChooseAsync()
+Action -> Action : busy = true, clear old error
+Action --> View : StateChanged → Render
+Action -> Picker : PickAsync(ownerToken)
+Picker -> Panel : BeginSheet(owner)
+Panel --> Picker : path / user cancel
+Picker --> Action : path / null
+Action -> Action : update selection, busy = false
+Action --> View : StateChanged → Render
+note over Action, Picker
+  User cancel preserves selection.
+  Owner dispose cancels the dialog.
+  Failure preserves selection and reports error.
+  Retry clears the previous error.
 end note
 @enduml

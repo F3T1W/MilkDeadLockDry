@@ -6,13 +6,4 @@
     <SupportedOSPlatformVersion>14.0</SupportedOSPlatformVersion>
     <ApplicationId>org.milkdeadlockdry.launcher</ApplicationId>
   </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\MilkDeadLockDry.Core\MilkDeadLockDry.Core.csproj" />
-    <ProjectReference Include="..\MilkDeadLockDry.Infrastructure\MilkDeadLockDry.Infrastructure.csproj" />
-  </ItemGroup>
 </Project>
