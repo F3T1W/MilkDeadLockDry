@@ -3,7 +3,7 @@
 Local luancher starting solution: .NET 10, Avalonia/XAML,
 CommunityToolkit.Mvvm
 
-## Проекты и зависимости
+## Projects and dependencies
 
 - **MilkDeadLockDry.Core**: Domain - models and rules; Application - scenarios and contracts
 - **MilkDeadLockDry.Infrastructure**: processes, Wine, file и storage, depends on Core
@@ -15,7 +15,7 @@ Core doesn't depends on another projects
 All three projects are inclided in desktop-app
 Folders Domain/Application includes only responsibility descriptions for now
 
-## Первый шаг разработки
+## First Step
 
 - In Core LaunchRequest, GameSession, IGameRunner и LaunchGameUseCase need to be implemented
 - Then connect FakeGameRunner and button with progress/cancel in Desktop
