@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
+  <Folder Name="/Solution Items/docs/">
+    <File Path="docs/architecture.puml" />
+    <File Path="docs/fsd-architecture.md" />
+    <File Path="docs/learning-route.md" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Solution Items/scripts/">
+    <File Path="scripts/check-fsd.py" />
+    <File Path="scripts/check-selection.sh" />
+    <File Path="scripts/setup-macos.sh" />
+  </Folder>
+  <Folder Name="/Solution Items/workflow/" />
+  <Folder Name="/src/">
+    <Project Path="src\DeadLocky\DeadLocky.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DeadLocky.UnitTests/DeadLocky.UnitTests.csproj" />
+  </Folder>
+</Solution>

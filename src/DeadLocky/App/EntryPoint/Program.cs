@@ -1,4 +1,4 @@
-namespace MilkDeadLockDry.Desktop;
+namespace DeadLocky.App.EntryPoint;
 
 internal static class Program
 {
