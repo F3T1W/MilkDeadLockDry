@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MilkDeadLockDry.Core/MilkDeadLockDry.Core.csproj" />
+    <Project Path="src/MilkDeadLockDry.Desktop/MilkDeadLockDry.Desktop.csproj" />
+    <Project Path="src/MilkDeadLockDry.Infrastructure/MilkDeadLockDry.Infrastructure.csproj" />
+  </Folder>
+</Solution>

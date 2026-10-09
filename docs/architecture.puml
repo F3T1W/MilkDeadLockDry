@@ -1,0 +1,114 @@
+@startuml components
+title MilkDeadLockDry — компоненты и зависимости
+skinparam shadowing false
+package "MilkDeadLockDry.app — один выпуск" {
+  component "MilkDeadLockDry.Desktop\nAvalonia + CommunityToolkit.Mvvm" as Desktop
+  component "MilkDeadLockDry.Core\nGameLaunch / Runtime / Mods / Profiles" as Core
+  component "MilkDeadLockDry.Infrastructure\nWine / файловая система / JSON" as Infrastructure
+  Desktop ..> Core : вызывает сценарии
+  Infrastructure ..> Core : использует контракты
+  Desktop ..> Infrastructure : только регистрация в DI
+}
+component "MilkDeadLockDry.Cli\nинструмент разработки" as Cli
+component "Wine → Windows Steam → Deadlock\nвнешние процессы" as Game
+folder "Application Support\nпрофили / логи / journal / prefix" as Files
+Cli ..> Core : те же сценарии
+Cli ..> Infrastructure : регистрация в DI
+Infrastructure --> Game : запуск и наблюдение
+Infrastructure --> Files : чтение и запись
+note bottom of Core
+  Модули — функциональные границы внутри монолита.
+  Core не зависит от Avalonia, Toolkit и конкретного Wine.
+  RabbitMQ и Kafka в этой архитектуре отсутствуют.
+end note
+@enduml
+
+@startuml classes
+title MilkDeadLockDry — классы сценария запуска
+skinparam shadowing false
+class MainWindow <<View>> {
+  DataContext : MainWindowViewModel
+}
+class MainWindowViewModel <<ViewModel>> {
+  SelectedProfile : ModProfile
+  IsBusy : bool
+  Progress : LaunchProgress
+  PlayCommand : IAsyncRelayCommand
+  CancelPreparationCommand : ICommand
+}
+class LaunchGameUseCase <<Core>> {
+  LaunchAsync(request, progress, ct) : Task<GameSession>
+}
+class LaunchRequest <<record>> {
+  RuntimeId
+  ProfileId
+  GamePath
+}
+interface IGameRunner {
+  StartAsync(request, progress, ct) : Task<GameSession>
+}
+interface IModInstaller {
+  ApplyAsync(plan, progress, ct) : Task<InstallResult>
+  RecoverAsync(ct) : Task
+}
+interface IProfileRepository {
+  LoadAsync(profileId, ct) : Task<ModProfile>
+}
+class WineGameRunner <<Infrastructure>>
+class ModInstaller <<Infrastructure>>
+class JsonProfileRepository <<Infrastructure>>
+MainWindow ..> MainWindowViewModel : binding
+MainWindowViewModel ..> LaunchGameUseCase : await
+LaunchGameUseCase ..> LaunchRequest
+LaunchGameUseCase ..> IProfileRepository
+LaunchGameUseCase ..> IModInstaller
+LaunchGameUseCase ..> IGameRunner
+WineGameRunner ..|> IGameRunner
+ModInstaller ..|> IModInstaller
+JsonProfileRepository ..|> IProfileRepository
+note bottom of MainWindowViewModel
+  Model — ModProfile / RuntimeSpec / InstallPlan.
+  ViewModel хранит состояние экрана, а не правила установки.
+  Подписи методов — эскиз контрактов, не готовые API.
+end note
+@enduml
+
+@startuml launch
+title MilkDeadLockDry — успешный запуск с модами
+skinparam shadowing false
+actor Пользователь as User
+participant MainWindowViewModel as VM
+participant LaunchGameUseCase as UC
+participant ModInstaller as Mods
+participant WineGameRunner as Runner
+participant "Steam / Deadlock" as Game
+User -> VM : Играть
+VM -> UC : LaunchAsync(request, progress, ct)
+activate UC
+UC -> UC : preflight, профиль, план, блокировка
+UC -> Mods : ApplyAsync(plan, progress, ct)
+activate Mods
+Mods -> Mods : staging → journal → apply
+Mods --> UC : InstallResult
+deactivate Mods
+UC --> VM : IProgress<LaunchProgress>
+UC -> Runner : StartAsync(request, progress, ct)
+activate Runner
+Runner -> Game : запустить / переиспользовать Steam своего prefix
+Runner -> Runner : дождаться и идентифицировать процесс игры
+Runner --> UC : GameSession
+deactivate Runner
+UC --> VM : GameSession
+deactivate UC
+VM --> User : статус Running
+note over VM, UC
+  Отмена подготовки и ожидания — CancellationToken.
+  Завершение запущенной игры — отдельная команда.
+end note
+note over UC, Mods
+  При сбое записи — восстановление по журналу.
+  При сбое запуска уже применённый профиль сохраняется:
+  восстановление Vanilla — отдельная операция.
+  В Vanilla-режиме шаг применения модов пропускается.
+end note
+@enduml

@@ -1,0 +1,14 @@
+# .NET build output and generated artifacts
+**/bin/
+**/obj/
+artifacts/
+
+# Local Rider / IDE settings; shared .editorconfig and .DotSettings stay versioned
+.idea/
+*.user
+*.suo
+
+# macOS metadata
+.DS_Store
+.AppleDouble/
+._*
