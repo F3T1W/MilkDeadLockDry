@@ -5,32 +5,52 @@ public sealed class AppKitDirectoryPicker(NSWindow owner) : IDirectoryPicker
     public async Task<string?> PickAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using NSOpenPanel panel = NSOpenPanel.OpenPanel;
-        panel.CanChooseDirectories = true;
-        panel.CanChooseFiles = false;
-        panel.AllowsMultipleSelection = false;
-        panel.CanCreateDirectories = false;
-        panel.Prompt = "Choose";
-        var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        panel.BeginSheet(owner, response =>
+        using var session = new PickerSession(owner, cancellationToken);
+        return await session.RunAsync();
+    }
+
+    private sealed class PickerSession(NSWindow owner, CancellationToken token) : IDisposable
+    {
+        private readonly TaskCompletionSource<string?> _completion = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly NSOpenPanel _panel = NSOpenPanel.OpenPanel;
+        private bool _disposed;
+
+        public void Dispose()
         {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                completion.TrySetCanceled(cancellationToken);
-            }
-            else
-            {
-                completion.TrySetResult(response == (nint)NSModalResponse.OK ? panel.Url.Path : null);
-            }
-        });
-        await using CancellationTokenRegistration registration = cancellationToken.Register(() =>
+            _disposed = true;
+            _panel.Dispose();
+        }
+
+        public async Task<string?> RunAsync()
+        {
+            _panel.CanChooseDirectories = true;
+            _panel.CanChooseFiles = false;
+            _panel.AllowsMultipleSelection = false;
+            _panel.CanCreateDirectories = true;
+            _panel.Prompt = "Choose";
+            _panel.BeginSheet(owner, OnCompleted);
+            await using CancellationTokenRegistration registration = token.Register(OnCancelled);
+            return await _completion.Task;
+        }
+
+        private void OnCompleted(nint response)
+        {
+            _ = token.IsCancellationRequested
+                ? _completion.TrySetCanceled(token)
+                : _completion.TrySetResult(response == (nint)NSModalResponse.OK ? _panel.Url.Path : null);
+        }
+
+        private void OnCancelled()
+        {
             owner.BeginInvokeOnMainThread(() =>
             {
-                if (!completion.Task.IsCompleted)
+                if (!_disposed && !_completion.Task.IsCompleted)
                 {
-                    panel.Cancel(panel);
+                    _panel.Cancel(_panel);
                 }
-            }));
-        return await completion.Task;
+            });
+        }
     }
 }

@@ -14,6 +14,12 @@ internal sealed class AppDelegate : NSApplicationDelegate
         NSApplication.SharedApplication.ActivationPolicy = NSApplicationActivationPolicy.Regular;
         ApplicationMenu.Install();
         _mainWindowController = LauncherComposition.CreateLauncher();
+        ApplicationMenu.ConfigureEnvironmentSetup(_mainWindowController.ShowRuntimeSetupAsync);
+
+#if DEBUG
+        ApplicationMenu.ConfigureSetupTest(_mainWindowController.TestRuntimeSetupAsync);
+#endif
+
         _mainWindowController.ShowWindow(this);
         NSApplication.SharedApplication.Activate();
     }

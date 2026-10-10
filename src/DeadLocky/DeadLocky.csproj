@@ -1,9 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFrameworks>net10.0-macos;net10.0</TargetFrameworks>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-macos</TargetFramework>
     <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
     <SupportedOSPlatformVersion>14.0</SupportedOSPlatformVersion>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <NoDSymUtil Condition="'$(PublishAot)' == 'true'">true</NoDSymUtil>
     <ApplicationId>org.milkdeadlockdry.launcher</ApplicationId>
   </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <Compile Remove="App/**/*.cs;Pages/**/*.cs;Features/*/Ui/**/*.cs;Shared/Ui/**/*.cs"/>
+    <Compile Remove="Shared/Api/Directories/AppKitDirectoryPicker.cs"/>
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DeadLocky.UnitTests"/>
+  </ItemGroup>
 </Project>

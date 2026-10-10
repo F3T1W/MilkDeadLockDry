@@ -1,8 +1,7 @@
 # Features
 
-Each slice represents an independent user action, with Model/Ui/Api segments as needed.
-SelectGameDirectory uses immutable state and a controller, not MVVM.
-Public API: SelectGameDirectoryView(IDirectoryPicker), SelectedDirectory, SelectionChanged.
-State/controller details remain internal. The generic picker port is injected from App.
-Business adapters belong to feature/entity APIs; generic I/O lives in Shared.
-Features never import peer features. Coordinate separate features in Pages or App.
+PrepareGame owns directory selection, saved Steam sign-in and installation workflow.
+LaunchGame owns runtime setup, game launch, monitoring and exit cleanup.
+Each slice has Model/Api/Ui segments as needed. Controllers and implementation adapters remain internal;
+public contracts and native view methods provide the boundary used by App and Pages.
+Features never import peer features. Pages coordinates them using injected delegates.
