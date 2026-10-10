@@ -1,90 +1,58 @@
-# FSD architecture: native macOS launcher
+# FSD architecture
 
-The organizing rules are FSD layers, isolated business slices and explicit public APIs.
-AppKit is the platform adapter. State is represented by immutable records and controlled actions.
-There is no mandatory MVVM, binding engine, RelayCommand, shared store or event bus.
+DeadLocky uses a single macOS executable with native AppKit controls. FSD layers are directories,
+within one application project. Its `net10.0-macos` target includes AppKit; its `net10.0` target
+compiles portable APIs and models for the separate test project.
+Dependency direction is App → Pages → Features → Entities / Shared.
+Features never import sibling features; Pages coordinates them through public view APIs.
 
-## Current directories
+The [Mermaid UML diagram](../README.md#architecture-and-checks) is maintained directly in the README.
 
-- App/EntryPoint: Program and application lifecycle.
-- App/Composition: creates the Launcher and binds IDirectoryPicker to AppKitDirectoryPicker.
-- App/Ui: application menu.
-- Pages/Launcher/Ui: screen layout, owns and disposes its feature views.
-- Features/SelectGameDirectory/Model: immutable DirectorySelectionState and action controller.
-- Features/SelectGameDirectory/Ui: native controls, event handlers and rendering.
-- Entities/Game/Model: GameDirectory value, not a verified installation.
-- Shared/Api/Directories: reusable directory-picker contract and native implementation.
+## Responsibilities
 
-MilkDeadLockDry/MilkDeadLockDry.csproj targets net10.0-macos.
-FSD layers live directly in the project directory; the SDK discovers C# files automatically.
-Docs and Scripts live at solution level and are solution items in MilkDeadLockDry.slnx.
-The FSD layers are directories inside this project, not separate assemblies.
-App → Pages / Shared; Pages → Features / Shared; Features → Entities / Shared.
-No ProjectReference is needed. Dependencies below describe code imports, not assembly references.
+- App owns application lifecycle, menus and dependency composition.
+- Pages/Launcher owns screen layout and feature lifetimes.
+- Features/PrepareGame owns selected directory, saved sign-in and installation state. Its service
+  delegates authentication and download to the Windows Steam client configured by LaunchGame.
+- Features/LaunchGame owns runtime preparation, configuration, launch, monitoring and prefix cleanup.
+- Entities contains GameDirectory and SteamAccount values.
+- Shared contains generic directory selection and native presentation helpers.
 
-App and Shared contain segments directly. Other layers contain slices, then segments.
-Widgets appears only when there is a large reusable UI block. Processes is not used.
-There is one executable project. Info.plist stays at the project root as required bundle metadata.
+The composition root injects delegates between features instead of creating cross-slice imports.
+Controllers expose immutable states and action methods. Render displays state on the AppKit thread;
+external I/O belongs in API adapters. Views unsubscribe and dispose their controllers with the window.
+Cancellation must suppress stale results and preserve previously installed game/runtime data.
 
-## Feature public API
+## Steam and installation
 
-SelectGameDirectoryView takes an IDirectoryPicker. Its SelectedDirectory property exposes the
-current value and SelectionChanged notifies only when that value changes. Upper layers never
-access DirectorySelectionState or DirectorySelectionController: both are internal.
+Windows Steam owns login, downloads, file validation and updates. Local text KeyValues metadata detects
+remembered sign-in and completed installation; malformed or missing metadata is treated as unavailable.
+Preparation also recognizes old completion receipts without downloading files itself. InstallationStore
+persists directory preferences atomically and checks receipt paths, file sizes and modification times.
+Steam credentials remain with Windows Steam. No QR authentication or Keychain token adapter remains.
 
-GameDirectory is the entity public API. IDirectoryPicker is a generic Shared port:
-PickAsync returns a path, null for user cancellation, or throws for owner cancellation/failure.
-App supplies the concrete adapter; page and feature do not construct NSOpenPanel.
+The runtime installer validates Apple graphics, verifies downloaded component hashes, stages Wine and
+Steam installation and marks readiness only after setup succeeds. Ownership markers prevent overwriting
+unrelated destinations. A cross-process lock serializes setup. Cancellation and failures stop only the new
+prefix and remove only owned destinations. The setup test creates an independent root and never saves
+its returned configuration into the production launcher. Rosetta remains a shared system dependency.
 
-C# namespaces at the slice root are the public entry point. Public API consists only of documented
-public types. All slices compile into one assembly: internal does not enforce slice isolation.
-check-fsd.py guards the single-project layout and explicit namespace imports, not all semantic dependencies.
-Same-layer cross-slice imports require removal or composition in a higher layer.
+## Game lifetime
 
-## State, actions and lifetime
+IGameSession.Completion follows the game process, rather than Steam's initial command process.
+Monitoring can attach to an existing matching game. Disposing monitoring never kills the game.
+The saved exit preference controls Steam cleanup scoped to the configured prefix.
 
-The feature owns state: selected directory, dialog busy flag and error.
-Choose sets busy, invokes the picker, then publishes a new immutable state.
-A second Choose and Clear are ignored while busy. User cancellation preserves the old selection.
-Failure preserves selection and becomes visible; retry clears the old error.
-Clear resets state. Dispose cancels the operation and suppresses further notifications.
-Controllers are owned by their view and used on the UI thread, not a global concurrent store.
+## NativeAOT and validation
 
-View listens for StateChanged, marshals Render to the AppKit UI thread and sets native control
-properties. Domain rules and external I/O never belong in Render. AppKitDirectoryPicker owns
-the panel for the duration of its task, closes it when the owner's token is cancelled and releases it.
-The page disposes views before releasing its window. AppDelegate owns the page controller.
+Release builds enable PublishAot; Debug remains suitable for managed debugging. JSON contexts are
+source-generated. AppKit callbacks use registered native types. SDK 27 currently needs NoDSymUtil for
+NativeAOT bundles because its dSYM pipeline references a globalization dylib omitted from that bundle.
 
-## Product boundaries and next route
+The portable test project references the application project's `net10.0` target. Tests cover controller cancellation,
+remembered sign-in, game-session monitoring, prefix-scoped cleanup, installation transactions and verified
+download reuse. Native UI checks and a full actual game session remain separate validation layers.
+check-fsd.py checks layout and explicit namespace imports, not semantic architecture correctness.
 
-1. Detect an existing installation: Features/DetectGameInstallation, entity installation metadata.
-   Confirm required files and metadata; a selected path alone is not an installation.
-2. Verify a runtime and a complete match through a CLI before implementing real launch.
-3. Install/update: Features/InstallGame. The feature API adapts Steam/DepotDownloader;
-   Shared supplies domain-independent process/network mechanisms, not Steam Game rules.
-4. Launch: Features/LaunchGame. Runtime/prefix/Steam ownership belongs in this scenario and its API.
-5. Mods: Features/ApplyModProfile; Entities/ModProfile holds profile models.
-   Plan before writes, check conflicts and serialize changes with staging and recovery journal.
-6. Pages composes independent actions and coordinates results through their public APIs.
-   A feature must not invoke a sibling feature. Shared must never accumulate business orchestration.
-
-Installation data, runtime metadata, mod profiles and running sessions are separate entity candidates.
-They are added when real scenarios need them; empty classes, repository interfaces and universal
-generic services are not created in advance. JSON is sufficient initially; SQLite is introduced
-only for a demonstrated storage/query requirement. No RabbitMQ, Kafka or Aspire orchestration.
-
-## Code quality and validation
-
-SOLID, DRY and KISS guide responsibilities, ports for I/O and removal of duplicated knowledge.
-Abstractions need a concrete boundary or reuse, not a base class for every UI object.
-Microsoft C# conventions are enforced by .editorconfig, Nullable and .NET analyzers.
-File-changing scenarios need recovery tests; UI changes need real native smoke checks.
-
-Scripts/check-selection.sh compiles the production Model, picker contract, entity and behavioral
-checks in a temporary portable harness outside the repository, then removes it. No second project
-is kept in the repository. This allows action behavior to be checked without AppKit or extra packages.
-It checks selection, clear, user cancellation, failure/retry, busy guard and owner disposal.
-It is a behavioral check executable, not a dotnet test runner and not a substitute for native UI tests.
-
-Sources: [FSD layers](https://feature-sliced.design/docs/reference/layers),
+References: [FSD layers](https://feature-sliced.design/docs/reference/layers),
 [FSD public API](https://feature-sliced.design/docs/reference/public-api).

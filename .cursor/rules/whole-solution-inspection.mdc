@@ -1,0 +1,6 @@
+---
+description: Require a completed Rider whole-solution inspection with zero issues after repository changes.
+alwaysApply: true
+---
+
+Read and follow the required inspection workflow in the repository-root `AGENTS.md`.

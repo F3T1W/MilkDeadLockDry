@@ -1,4 +1,4 @@
-"""Check the single-project FSD layout and explicit C# namespace imports (not a semantic analyzer)."""
+"""Check FSD source layout, project references and explicit namespace imports (not a semantic analyzer)."""
 
 from pathlib import Path
 import re
@@ -8,16 +8,22 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 LAYERS = {"shared": 0, "entities": 1, "features": 2, "pages": 3, "app": 4}
 errors = []
-PROJECT_ROOT = ROOT / "MilkDeadLockDry"
-project = PROJECT_ROOT / "MilkDeadLockDry.csproj"
+PROJECT_ROOT = ROOT / "src" / "DeadLocky"
+project = PROJECT_ROOT / "DeadLocky.csproj"
 projects = {p.resolve() for p in ROOT.rglob("*.csproj")
             if not any(part in {".dotnet", "bin", "obj", ".git"} for part in p.relative_to(ROOT).parts)}
-solution = ET.parse(ROOT / "MilkDeadLockDry.slnx")
-listed = {(ROOT / p.attrib["Path"]).resolve() for p in solution.iter("Project")}
-if projects != {project.resolve()} or listed != {project.resolve()}:
-    errors.append("The repository and solution must contain exactly MilkDeadLockDry.csproj.")
-if list(ET.parse(project).iter("ProjectReference")):
-    errors.append("The application must not reference other projects.")
+solution = ET.parse(ROOT / "DeadLocky.slnx")
+listed = {(ROOT / p.attrib["Path"].replace("\\", "/")).resolve() for p in solution.iter("Project")}
+tests = ROOT / "tests" / "DeadLocky.UnitTests" / "DeadLocky.UnitTests.csproj"
+expected = {project.resolve(), tests.resolve()}
+if projects != expected or listed != expected:
+    errors.append("The repository and solution must contain one application project and one test project.")
+for consumer in (project, tests):
+    references = {(consumer.parent / node.attrib["Include"]).resolve()
+                  for node in ET.parse(consumer).iter("ProjectReference")}
+    expected_references = set() if consumer == project else {project.resolve()}
+    if references != expected_references:
+        errors.append(f"Unexpected project references: {consumer.relative_to(ROOT)}")
 
 for folder in PROJECT_ROOT.iterdir():
     if not folder.is_dir() or folder.name in {"bin", "obj"}:
@@ -35,12 +41,12 @@ for folder in PROJECT_ROOT.iterdir():
             errors.append(f"Missing file-scoped namespace: {source.relative_to(ROOT)}")
             continue
         owner = namespace.group(1).split(".")
-        if len(owner) < 2 or owner[:2] != ["MilkDeadLockDry", folder.name]:
+        if len(owner) < 2 or owner[:2] != ["DeadLocky", folder.name]:
             errors.append(f"Namespace does not match layer: {source.relative_to(ROOT)}")
             continue
         imports = re.findall(
             r"^\s*(?:global\s+)?using\s+(?:static\s+|\w+\s*=\s*)?"
-            r"(MilkDeadLockDry\.[\w.]+)\s*;", text, re.MULTILINE
+            r"(DeadLocky\.[\w.]+)\s*;", text, re.MULTILINE
         )
         for imported in imports:
             parts = imported.split(".")
@@ -54,4 +60,4 @@ for folder in PROJECT_ROOT.iterdir():
 if errors:
     print("\n".join(errors), file=sys.stderr)
     sys.exit(1)
-print("FSD checks passed: one project, directory layers and namespace imports.")
+print("FSD checks passed: one application project and tests, directory layers and namespace imports.")
